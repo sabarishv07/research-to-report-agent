@@ -1,0 +1,114 @@
+---
+description: Research-to-Report Agent - project context, architecture, and coding rules
+alwaysApply: true
+---
+
+# Project: Research-to-Report Agent
+
+An autonomous agent that takes a topic, plans sub-questions, researches them with tools, verifies claims against sources, writes a cited report, and delivers it by email. The goal is to demonstrate tool use, error handling, guardrails, observability, and evaluation. Do NOT build a single-prompt chatbot.
+
+## Core flow
+
+Topic -> Planner (3-6 sub-questions) -> Executor loop (tool call -> self-check) -> Verifier (claims vs sources) -> Report generator (structured, cited) -> Delivery (email / PDF / markdown)
+
+## Tech stack
+
+- Python 3.11+
+- LLM: Anthropic Claude API with native tool use (function calling)
+- Custom agent loop (no LangChain/LangGraph unless asked)
+- Pydantic for all structured data and tool schemas
+- httpx + tenacity for HTTP calls and retries
+- FastAPI for the API, Typer for the CLI
+- Structured JSON logging for traces
+- pytest for tests
+- Docker for packaging
+
+## Folder structure
+
+```
+research-agent/
+  src/agent/
+    __init__.py
+    config.py          # settings, budgets, limits (env-driven)
+    models.py          # Pydantic: Plan, SubQuestion, Claim, Finding, VerifiedClaim, RunResult
+    exceptions.py      # BudgetExceededError, StuckLoopError, BadJSONError, ToolError, ...
+    pipeline.py        # orchestration; run() never raises, returns RunResult
+    planner.py         # topic -> list of sub-questions
+    executor.py        # main loop: choose tool, run, self-check
+    verifier.py        # check each claim against its source text
+    reporter.py        # build structured report with citations
+    guardrails.py      # iteration cap, cost ceiling, stuck detector
+    tracing.py         # structured step logging (JSONL)
+    llm.py             # thin wrapper around the LLM API (retries, token counting)
+    tools/
+      base.py          # Tool interface + registry
+      sources.py       # SourceStore: every page fetched in a run (citation check)
+      search.py        # web search tool
+      fetch.py         # page fetch + text extraction
+      email_tool.py    # SMTP / SendGrid delivery
+      calculator.py    # optional
+  api/main.py          # FastAPI endpoint
+  cli.py               # Typer CLI
+  evals/
+    topics.json        # 10-20 test topics
+    run_eval.py        # success rate, cost, latency, failure categories
+  traces/              # JSONL traces (gitignored)
+  tests/
+  README.md
+  .env.example
+  Dockerfile
+  pyproject.toml
+```
+
+## Architecture rules
+
+1. Every tool implements the `Tool` interface in `tools/base.py` (name, description, Pydantic input schema, `run()`), and is registered in the registry. Never call tools ad hoc.
+2. The planner output is a typed `Plan` object and is logged as a trace event before execution starts.
+3. The executor loop must, per sub-question: pick a tool, run it, then run a self-check ("does this result answer the question?"). If not, retry with a different query or tool.
+4. The verifier checks every claim in the draft against the stored source text. Unsupported claims are removed or flagged. Never allow a citation that was not fetched in this run.
+5. LLM calls that must return JSON go through a validated parser. On malformed output: retry with the error message, then fail gracefully.
+6. All config (limits, keys, model names) comes from `config.py` / environment variables. No hardcoded secrets.
+
+## Guardrails (required, not optional)
+
+- Max iterations per sub-question and per run.
+- Token/cost budget ceiling; abort cleanly when exceeded and return a partial report.
+- Stuck detector: if the same tool is called with the same arguments twice, force a different strategy or stop.
+- Tool timeouts and retries with exponential backoff.
+- Graceful degradation: if search fails, try fallback tool; if everything fails for a sub-question, mark it as "unanswered" in the report instead of inventing content.
+
+## Observability
+
+- Log every step as a JSON line: timestamp, run_id, step type (plan / tool_call / tool_result / self_check / verify / report), inputs, outputs, tokens, cost, latency.
+- One trace file per run in `traces/`.
+- Provide a small script or page to view a trace in readable form.
+
+## Evaluation
+
+- `evals/run_eval.py` runs the agent on every topic in `evals/topics.json`.
+- Report: success rate, average cost, average latency, and failure categories (search empty, fetch failed, bad JSON, budget exceeded, stuck loop, hallucinated citation).
+- Save results to `evals/results/<date>.json` and summarise in the README.
+
+## Coding conventions
+
+- Type hints everywhere; Pydantic models for all data crossing module boundaries.
+- Small functions, single responsibility. No giant files.
+- Docstrings on public functions explaining behavior and failure modes.
+- Prefer explicit errors (custom exception classes) over silent failures.
+- Write a pytest test for every tool and for each guardrail (use mocked LLM and HTTP responses).
+- Do not add dependencies without saying why.
+
+## Build order (follow this sequence)
+
+1. Setup: repo, pyproject, config, .env.example, models.
+2. Tool layer: base interface, search, fetch, email, each with tests.
+3. LLM wrapper, planner, and executor loop with self-check.
+4. Verifier and report generator.
+5. Guardrails and failure handling.
+6. Tracing and trace viewer.
+7. Evaluation harness and results.
+8. FastAPI/CLI, Dockerfile, README with architecture diagram and sample trace.
+
+## v1 scope
+
+Keep it narrow: one domain (e.g. "weekly AI industry digest" or "competitor analysis for a company"). A focused agent that works reliably beats a general one that is flaky.

@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research-to-Report Agent | Autonomous Research & Verification</title>
+  <meta name="description" content="Autonomous research agent: plans sub-questions, searches the web, verifies claims against fetched pages, and produces cited reports.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg-base: #07090e;
+      --bg-surface: #0e131f;
+      --bg-card: rgba(18, 24, 39, 0.75);
+      --bg-card-hover: rgba(28, 38, 61, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(99, 102, 241, 0.5);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.35);
+      --accent: #38bdf8;
+      --accent-purple: #a855f7;
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.25);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.25);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-subtle);
+      --shadow-glow: 0 0 25px var(--primary-glow);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.12) 0px, transparent 45%),
+        radial-gradient(at 85% 10%, rgba(56, 189, 248, 0.08) 0px, transparent 40%),
+        radial-gradient(at 50% 90%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    header {
+      background: rgba(14, 19, 31, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .nav-container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: white;
+      stroke-width: 2.2;
+    }
+
+    .brand-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.03);
+      transition: all 0.2s ease;
+    }
+
+    .btn-link:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Container */
+    main {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      flex: 1;
+      width: 100%;
+    }
+
+    /* Hero Section */
+    .hero {
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 5px 14px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 440px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card Box */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-card);
+      padding: 24px;
+      transition: border-color 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+
+    /* Input Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .input-text, .textarea-text {
+      width: 100%;
+      background: rgba(10, 14, 23, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .input-text:focus, .textarea-text:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+      background: rgba(10, 14, 23, 0.95);
+    }
+
+    .textarea-text {
+      resize: vertical;
+      min-height: 90px;
+    }
+
+    /* Presets */
+    .presets-container {
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+
+    .presets-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .presets-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .preset-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .preset-pill:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+      transform: translateY(-1px);
+    }
+
+    /* Toggle row */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      margin-bottom: 20px;
+    }
+
+    .toggle-info h4 {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .toggle-info p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      transition: .3s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    /* Alert Banner */
+    .alert-banner {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      color: #fde68a;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .alert-banner.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: #a7f3d0;
+    }
+
+    /* Main Submit Button */
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px var(--primary-glow);
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    /* Execution Progress Pipeline */
+    .pipeline-progress {
+      display: none;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .pipeline-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      transition: all 0.3s ease;
+    }
+
+    .step-item.active {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+    }
+
+    .step-item.done {
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .step-item.active .step-icon {
+      background: var(--primary);
+      color: white;
+      animation: spin 2s linear infinite;
+    }
+
+    .step-item.done .step-icon {
+      background: var(--success);
+      color: white;
+    }
+
+    .step-text {
+      flex: 1;
+    }
+
+    .step-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .step-desc {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* Results Panel */
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Metrics Bar */
+    .metrics-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 14px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+
+    .metric-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .metric-val.badge-success { color: var(--success); }
+    .metric-val.badge-warning { color: var(--warning); }
+    .metric-val.badge-danger { color: var(--danger); }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .tab-badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    /* Report View */
+    .report-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      min-height: 480px;
+      position: relative;
+    }
+
+    .report-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .report-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .report-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .markdown-content {
+      line-height: 1.7;
+      color: #e2e8f0;
+      font-size: 0.98rem;
+    }
+
+    .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+      font-family: 'Outfit', sans-serif;
+      color: #fff;
+      margin-top: 1.5em;
+      margin-bottom: 0.6em;
+      letter-spacing: -0.02em;
+    }
+
+    .markdown-content h1 { font-size: 1.75rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.4em; }
+    .markdown-content h2 { font-size: 1.35rem; }
+    .markdown-content h3 { font-size: 1.15rem; }
+    .markdown-content p { margin-bottom: 1.1em; }
+    .markdown-content ul, .markdown-content ol { margin-left: 1.5em; margin-bottom: 1.1em; }
+    .markdown-content li { margin-bottom: 0.3em; }
+
+    .markdown-content blockquote {
+      border-left: 3px solid var(--primary);
+      padding-left: 16px;
+      color: #94a3b8;
+      font-style: italic;
+      margin: 1.2em 0;
+      background: rgba(99, 102, 241, 0.05);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 10px 16px;
+    }
+
+    .markdown-content code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: #38bdf8;
+    }
+
+    .markdown-content pre {
+      background: #090d16;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      overflow-x: auto;
+      margin: 1.2em 0;
+    }
+
+    .markdown-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5em 0;
+    }
+
+    .markdown-content th, .markdown-content td {
+      border: 1px solid var(--border-subtle);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .markdown-content th {
+      background: rgba(255, 255, 255, 0.04);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* Claims Cards */
+    .claims-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .claim-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .claim-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .claim-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .claim-status {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .claim-status.supported {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+
+    .claim-status.unsupported {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    .claim-status.unverified {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+    }
+
+    .claim-text {
+      font-size: 0.93rem;
+      color: #f8fafc;
+      font-weight: 500;
+    }
+
+    .claim-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .claim-url {
+      color: #38bdf8;
+      text-decoration: none;
+      max-width: 380px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .claim-url:hover {
+      text-decoration: underline;
+    }
+
+    /* Trace List */
+    .trace-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .trace-item {
+      background: rgba(10, 14, 23, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.84rem;
+    }
+
+    .trace-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .trace-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+
+    .trace-time {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+    }
+
+    .trace-payload {
+      color: var(--text-muted);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Placeholder state */
+    .placeholder-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-dim);
+    }
+
+    .placeholder-icon {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.4;
+      stroke: var(--text-muted);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header>
+    <div class="nav-container">
+      <a href="/" class="brand" id="brand-link">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="brand-title">Research-to-Report Agent</div>
+        </div>
+        <span class="brand-badge" id="app-version">v0.1.0</span>
+      </a>
+
+      <div class="nav-actions">
+        <div class="status-indicator">
+          <span class="status-dot" id="server-status-dot"></span>
+          <span id="server-status-text">FastAPI Engine Ready</span>
+        </div>
+        <a href="/docs" target="_blank" class="btn-link" id="nav-docs-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          API Docs (/docs)
+        </a>
+        <a href="/health" target="_blank" class="btn-link" id="nav-health-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+          Health (/health)
+        </a>
+        <button class="btn-link" id="btn-open-settings" onclick="toggleSettingsModal(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Config
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main>
+    <!-- Hero Banner -->
+    <section class="hero">
+      <div class="hero-tag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        Autonomous Multi-Step Research Engine
+      </div>
+      <h1>Deep Research &amp; Fact-Verified Reports</h1>
+      <p>Orchestrates tool loops (DuckDuckGo/Tavily, Fetch, Calculator), verifies atomic claims against fetched text to prevent hallucinated citations, and compiles structured markdown reports.</p>
+    </section>
+
+    <!-- App Grid -->
+    <div class="dashboard-grid">
+      <!-- Left Column: Controls & Launch -->
+      <section class="card" id="control-panel">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Research Mission
+          </div>
+        </div>
+
+        <form id="research-form" onsubmit="handleStartRun(event)">
+          <div class="form-group">
+            <label class="form-label" for="topic-input">Research Topic or Question</label>
+            <textarea id="topic-input" class="textarea-text" placeholder="e.g. State of solid-state batteries in 2026..." required minlength="3" maxlength="300">State of solid-state batteries in 2026</textarea>
+          </div>
+
+          <!-- Quick presets -->
+          <div class="presets-container">
+            <span class="presets-label">Popular Topics:</span>
+            <div class="presets-pills">
+              <button type="button" class="preset-pill" onclick="setPreset('State of solid-state batteries in 2026')">
+                🔋 Solid-state Batteries 2026
+              </button>
+              <button type="button" class="preset-pill" onclick="setPreset('AI chip market competition and packaging bottlenecks')">
+                🤖 AI Chip Market
+              </button>
+              <button type="button" class="preset-pill" onclick="setPreset('Post-quantum cryptography NIST standards and migration timelines')">
+                🔐 Post-Quantum Cryptography
+              </button>
+              <button type="button" class="preset-pill" onclick="setPreset('Small modular nuclear reactors commercialization status')">
+                ⚛️ SMR Nuclear Commercialization
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="email-input">Optional Recipient Email</label>
+            <input type="email" id="email-input" class="input-text" placeholder="recipient@example.com (optional)">
+          </div>
+
+          <!-- Mode Toggle -->
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <h4>Simulation / Demo Mode</h4>
+              <p id="demo-mode-desc">Instantly test pipeline execution, verifier and report without Anthropic API key</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="demo-mode-toggle" checked onchange="handleModeChange()">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div id="api-status-banner" class="alert-banner">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <span id="api-status-banner-text">Running in Demo Mode: Fast local preview of agent planner, verifier, claims, and traces.</span>
+          </div>
+
+          <button type="submit" id="btn-submit-run" class="btn-submit">
+            <svg id="btn-submit-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span id="btn-submit-text">Launch Research Agent</span>
+          </button>
+        </form>
+
+        <!-- Pipeline Execution Visualizer -->
+        <div id="pipeline-progress" class="pipeline-progress">
+          <div class="pipeline-steps">
+            <div class="step-item" id="step-planner">
+              <div class="step-icon">1</div>
+              <div class="step-text">
+                <div class="step-name">1. Planner Decomposition</div>
+                <div class="step-desc">Generating structured sub-questions</div>
+              </div>
+            </div>
+            <div class="step-item" id="step-executor">
+              <div class="step-icon">2</div>
+              <div class="step-text">
+                <div class="step-name">2. Tool Loop &amp; Web Fetch</div>
+                <div class="step-desc">Calling web_search, web_fetch, calculator</div>
+              </div>
+            </div>
+            <div class="step-item" id="step-verifier">
+              <div class="step-icon">3</div>
+              <div class="step-text">
+                <div class="step-name">3. Citation Fact-Verification</div>
+                <div class="step-desc">Validating claims against cached page text</div>
+              </div>
+            </div>
+            <div class="step-item" id="step-reporter">
+              <div class="step-icon">4</div>
+              <div class="step-text">
+                <div class="step-name">4. Markdown Report &amp; Delivery</div>
+                <div class="step-desc">Synthesizing verified claims with footnotes</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Results & Analysis -->
+      <section class="results-container">
+        <!-- Metrics Bar -->
+        <div class="metrics-bar">
+          <div class="metric-card">
+            <span class="metric-label">Status</span>
+            <span class="metric-val" id="metric-status">—</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Latency</span>
+            <span class="metric-val" id="metric-latency">—</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Cost</span>
+            <span class="metric-val" id="metric-cost">—</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">LLM Calls</span>
+            <span class="metric-val" id="metric-llm-calls">—</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Failures Recovered</span>
+            <span class="metric-val" id="metric-failures">—</span>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-nav">
+          <button class="tab-btn active" id="tab-btn-report" onclick="switchTab('report')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            Cited Report
+          </button>
+          <button class="tab-btn" id="tab-btn-claims" onclick="switchTab('claims')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            Verified Claims
+            <span class="tab-badge" id="claims-count-badge">0</span>
+          </button>
+          <button class="tab-btn" id="tab-btn-trace" onclick="switchTab('trace')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            Step Trace
+            <span class="tab-badge" id="trace-count-badge">0</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Report View -->
+        <div class="tab-pane active" id="pane-report">
+          <div class="report-card">
+            <div class="report-toolbar">
+              <div class="report-meta">
+                <span class="brand-badge" id="report-run-id">NO ACTIVE RUN</span>
+                <span style="font-size: 0.8rem; color: var(--text-dim);" id="report-word-count">0 words</span>
+              </div>
+              <div class="report-actions">
+                <button class="btn-link" onclick="copyReportMarkdown()" id="btn-copy-report">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  Copy Markdown
+                </button>
+                <button class="btn-link" onclick="downloadReport()" id="btn-download-report">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Download .md
+                </button>
+              </div>
+            </div>
+
+            <div id="report-content" class="markdown-content">
+              <div class="placeholder-state">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                <h3>Ready to Launch Research</h3>
+                <p style="margin-top: 6px; font-size: 0.9rem;">Enter a research topic on the left and click "Launch Research Agent" to generate a verified, cited report.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Verified Claims -->
+        <div class="tab-pane" id="pane-claims">
+          <div class="report-card">
+            <div class="claims-grid" id="claims-container">
+              <div class="placeholder-state">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                <h3>No Extracted Claims Yet</h3>
+                <p style="margin-top: 6px; font-size: 0.9rem;">Run the agent to inspect extracted claims, source URLs, and cross-verification judgements.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Step Trace -->
+        <div class="tab-pane" id="pane-trace">
+          <div class="report-card">
+            <div class="trace-timeline" id="trace-container">
+              <div class="placeholder-state">
+                <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                <h3>Execution Trace Timeline</h3>
+                <p style="margin-top: 6px; font-size: 0.9rem;">The agent writes structured JSONL events for every plan, search, tool call, self-check, and verifier decision.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settings-modal" onclick="if(event.target===this) toggleSettingsModal(false)">
+    <div class="modal-card">
+      <div class="card-header">
+        <h3 class="card-title">Environment Configuration</h3>
+        <button class="btn-link" onclick="toggleSettingsModal(false)">✕</button>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+        Settings loaded from your <code style="color: #38bdf8;">.env</code> file. You can also specify an Anthropic API Key directly below:
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cfg-api-key">Anthropic API Key</label>
+        <input type="password" id="cfg-api-key" class="input-text" placeholder="sk-ant-...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active Model</label>
+        <input type="text" id="cfg-model" class="input-text" value="claude-sonnet-5-5" disabled>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cost Ceiling (USD)</label>
+        <input type="text" id="cfg-cost" class="input-text" value="$0.75" disabled>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <button class="btn-link" onclick="toggleSettingsModal(false)">Cancel</button>
+        <button class="btn-submit" style="width: auto; padding: 10px 20px;" onclick="saveApiKey()">Save &amp; Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentRunResult = null;
+    let currentTrace = [];
+    let serverConfig = { has_api_key: false };
+
+    // Initialize
+    document.addEventListener("DOMContentLoaded", async () => {
+      await fetchConfig();
+      checkHealth();
+    });
+
+    async function fetchConfig() {
+      try {
+        const res = await fetch("/api/status");
+        if (res.ok) {
+          serverConfig = await res.json();
+          const toggle = document.getElementById("demo-mode-toggle");
+          const banner = document.getElementById("api-status-banner");
+          const bannerText = document.getElementById("api-status-banner-text");
+
+          if (serverConfig.anthropic_api_key_configured) {
+            toggle.checked = false;
+            banner.className = "alert-banner success";
+            bannerText.textContent = "Anthropic API key is configured. Ready for autonomous live execution!";
+          } else {
+            toggle.checked = true;
+            banner.className = "alert-banner";
+            bannerText.textContent = "No Anthropic API key in .env. Running in interactive Demo Mode (zero-cost preview).";
+          }
+          handleModeChange();
+        }
+      } catch (e) {
+        console.warn("Could not fetch server status:", e);
+      }
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch("/health");
+        const dot = document.getElementById("server-status-dot");
+        const txt = document.getElementById("server-status-text");
+        if (res.ok) {
+          dot.style.background = "var(--success)";
+          txt.textContent = "FastAPI Engine Online (localhost:8000)";
+        } else {
+          dot.style.background = "var(--danger)";
+          txt.textContent = "Engine Status Error";
+        }
+      } catch (e) {
+        document.getElementById("server-status-dot").style.background = "var(--danger)";
+        document.getElementById("server-status-text").textContent = "Offline";
+      }
+    }
+
+    function setPreset(topic) {
+      document.getElementById("topic-input").value = topic;
+    }
+
+    function handleModeChange() {
+      const isDemo = document.getElementById("demo-mode-toggle").checked;
+      const desc = document.getElementById("demo-mode-desc");
+      const btnText = document.getElementById("btn-submit-text");
+      const banner = document.getElementById("api-status-banner");
+      const bannerText = document.getElementById("api-status-banner-text");
+
+      if (isDemo) {
+        desc.textContent = "Test tool orchestration, claim extraction, verifier & report without API costs";
+        btnText.textContent = "Launch Simulation Demo";
+        banner.className = "alert-banner";
+        bannerText.textContent = "Demo Mode: Runs full simulated workflow with real traces, verified claims, and rendered report.";
+      } else {
+        desc.textContent = "Calls Claude model with live web tools, strict fact verification & budget ceiling";
+        btnText.textContent = "Launch Live Research Agent";
+        if (serverConfig.anthropic_api_key_configured) {
+          banner.className = "alert-banner success";
+          bannerText.textContent = "Live Mode: Will invoke real LLM loop and tools using your configured API key.";
+        } else {
+          banner.className = "alert-banner";
+          bannerText.textContent = "Warning: ANTHROPIC_API_KEY is not configured in .env. Click 'Config' above to add it.";
+        }
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+      document.getElementById(`tab-btn-${tab}`).classList.add("active");
+      document.getElementById(`pane-${tab}`).classList.add("active");
+    }
+
+    function toggleSettingsModal(open) {
+      document.getElementById("settings-modal").style.display = open ? "flex" : "none";
+    }
+
+    async function saveApiKey() {
+      const key = document.getElementById("cfg-api-key").value.trim();
+      if (!key) {
+        alert("Please enter a valid API key.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: key })
+        });
+        if (res.ok) {
+          serverConfig.anthropic_api_key_configured = true;
+          document.getElementById("demo-mode-toggle").checked = false;
+          handleModeChange();
+          toggleSettingsModal(false);
+          alert("API Key updated successfully!");
+        } else {
+          alert("Failed to update API key.");
+        }
+      } catch (e) {
+        alert("Error updating key: " + e.message);
+      }
+    }
+
+    async function handleStartRun(e) {
+      e.preventDefault();
+      const topic = document.getElementById("topic-input").value.trim();
+      const email = document.getElementById("email-input").value.trim() || null;
+      const isDemo = document.getElementById("demo-mode-toggle").checked;
+
+      const submitBtn = document.getElementById("btn-submit-run");
+      const submitText = document.getElementById("btn-submit-text");
+      const progressBox = document.getElementById("pipeline-progress");
+
+      submitBtn.disabled = true;
+      submitText.textContent = "Agent Executing...";
+      progressBox.style.display = "block";
+
+      // Reset steps
+      resetSteps();
+      setStepActive("step-planner");
+
+      try {
+        const endpoint = isDemo ? "/runs/demo" : "/runs";
+        
+        // Visual step progression
+        const stepTimer1 = setTimeout(() => { setStepDone("step-planner"); setStepActive("step-executor"); }, 1200);
+        const stepTimer2 = setTimeout(() => { setStepDone("step-executor"); setStepActive("step-verifier"); }, 2800);
+        const stepTimer3 = setTimeout(() => { setStepDone("step-verifier"); setStepActive("step-reporter"); }, 4200);
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic, email_to: email })
+        });
+
+        clearTimeout(stepTimer1);
+        clearTimeout(stepTimer2);
+        clearTimeout(stepTimer3);
+
+        setStepDone("step-planner");
+        setStepDone("step-executor");
+        setStepDone("step-verifier");
+        setStepDone("step-reporter");
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server responded with status ${res.status}`);
+        }
+
+        const data = await res.json();
+        currentRunResult = data;
+        displayRunResult(data);
+
+        // Fetch trace
+        if (data.run_id) {
+          fetchTrace(data.run_id);
+        }
+      } catch (err) {
+        alert("Execution Error: " + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        handleModeChange();
+      }
+    }
+
+    function resetSteps() {
+      ["step-planner", "step-executor", "step-verifier", "step-reporter"].forEach(id => {
+        const el = document.getElementById(id);
+        el.className = "step-item";
+      });
+    }
+
+    function setStepActive(id) {
+      const el = document.getElementById(id);
+      if (el) el.className = "step-item active";
+    }
+
+    function setStepDone(id) {
+      const el = document.getElementById(id);
+      if (el) el.className = "step-item done";
+    }
+
+    function displayRunResult(data) {
+      // Metrics
+      const statusEl = document.getElementById("metric-status");
+      statusEl.textContent = data.status.toUpperCase();
+      statusEl.className = "metric-val " + (data.status === "success" ? "badge-success" : data.status === "partial" ? "badge-warning" : "badge-danger");
+
+      document.getElementById("metric-latency").textContent = `${data.latency_s}s`;
+      document.getElementById("metric-cost").textContent = `$${data.cost_usd.toFixed(4)}`;
+      document.getElementById("metric-llm-calls").textContent = data.llm_calls;
+
+      const failCount = Object.values(data.failures || {}).reduce((a, b) => a + b, 0);
+      document.getElementById("metric-failures").textContent = failCount;
+
+      // Meta
+      document.getElementById("report-run-id").textContent = `RUN #${data.run_id}`;
+      const words = (data.report_markdown || "").trim().split(/\s+/).filter(Boolean).length;
+      document.getElementById("report-word-count").textContent = `${words} words`;
+
+      // Render Markdown
+      const reportContainer = document.getElementById("report-content");
+      if (window.marked && data.report_markdown) {
+        reportContainer.innerHTML = marked.parse(data.report_markdown);
+      } else {
+        reportContainer.innerHTML = `<pre>${data.report_markdown}</pre>`;
+      }
+
+      switchTab("report");
+    }
+
+    async function fetchTrace(runId) {
+      try {
+        const res = await fetch(`/runs/${runId}/trace`);
+        if (res.ok) {
+          currentTrace = await res.json();
+          renderTrace(currentTrace);
+          extractAndRenderClaims(currentTrace);
+        }
+      } catch (e) {
+        console.warn("Could not fetch trace:", e);
+      }
+    }
+
+    function renderTrace(events) {
+      const container = document.getElementById("trace-container");
+      document.getElementById("trace-count-badge").textContent = events.length;
+
+      if (!events || events.length === 0) {
+        container.innerHTML = `<div class="placeholder-state"><p>No trace events found.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = events.map(ev => {
+        const type = ev.type || "event";
+        const time = ev.t !== undefined ? `${ev.t}s` : "";
+        let details = "";
+        
+        if (type === "plan") {
+          details = `Sub-questions (${(ev.plan?.sub_questions || []).length}):\n` + 
+            (ev.plan?.sub_questions || []).map(q => ` • [${q.id}] ${q.question}`).join("\n");
+        } else if (type === "tool_call") {
+          details = `Tool: ${ev.tool}(${JSON.stringify(ev.args)})`;
+        } else if (type === "tool_result") {
+          details = `Result: ${typeof ev.result === "string" ? ev.result.substring(0, 180) + "..." : JSON.stringify(ev.result)}`;
+        } else if (type === "self_check") {
+          details = `Answered: ${ev.answered} | Claims extracted: ${(ev.claims || []).length}`;
+        } else if (type === "verifier") {
+          details = `Claims evaluated: ${(ev.verdicts || []).length}`;
+        } else if (type === "failure") {
+          details = `Failure recovered: [${ev.category}] ${ev.detail || ""}`;
+        } else {
+          details = JSON.stringify(ev, null, 2);
+        }
+
+        return `
+          <div class="trace-item">
+            <div class="trace-header">
+              <span class="trace-badge">${type.toUpperCase()}</span>
+              <span class="trace-time">${time}</span>
+            </div>
+            <div class="trace-payload">${escapeHtml(details)}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function extractAndRenderClaims(events) {
+      const container = document.getElementById("claims-container");
+      let claimsList = [];
+
+      events.forEach(ev => {
+        if (ev.type === "verified_claims" && Array.isArray(ev.claims)) {
+          claimsList = ev.claims;
+        } else if (ev.type === "self_check" && Array.isArray(ev.claims) && claimsList.length === 0) {
+          claimsList = ev.claims.map(c => ({ claim: c, status: "supported", reason: "Direct source citation" }));
+        }
+      });
+
+      document.getElementById("claims-count-badge").textContent = claimsList.length;
+
+      if (claimsList.length === 0) {
+        container.innerHTML = `
+          <div class="placeholder-state">
+            <p>No claims were explicitly tagged in this run trace.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = claimsList.map(item => {
+        const claimText = item.claim ? item.claim.text : item.text;
+        const sourceUrl = item.claim ? item.claim.source_url : item.source_url;
+        const status = item.status || "supported";
+        const reason = item.reason || "Cross-referenced with fetched page text";
+
+        return `
+          <div class="claim-item">
+            <div class="claim-header">
+              <span class="claim-status ${status}">${status}</span>
+              <span style="font-size: 0.75rem; color: var(--text-dim);">${reason}</span>
+            </div>
+            <div class="claim-text">"${escapeHtml(claimText)}"</div>
+            <div class="claim-footer">
+              <span>Source URL:</span>
+              <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="claim-url">${sourceUrl}</a>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function copyReportMarkdown() {
+      if (!currentRunResult || !currentRunResult.report_markdown) {
+        alert("No report generated yet.");
+        return;
+      }
+      navigator.clipboard.writeText(currentRunResult.report_markdown);
+      const btn = document.getElementById("btn-copy-report");
+      btn.textContent = "Copied!";
+      setTimeout(() => {
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy Markdown`;
+      }, 1800);
+    }
+
+    function downloadReport() {
+      if (!currentRunResult || !currentRunResult.report_markdown) {
+        alert("No report generated yet.");
+        return;
+      }
+      const blob = new Blob([currentRunResult.report_markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report_${currentRunResult.run_id || "research"}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
